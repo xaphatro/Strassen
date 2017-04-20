@@ -1,0 +1,278 @@
+using System;
+using System.Threading.Tasks;
+using System.Diagnostics;
+
+public class Matrix
+{
+    //the main function calls the function for different sizes of n
+    //and measures the time taken for each value
+    public static void Main()
+    { 
+        int n;
+        float t;
+        Stopwatch watch = Stopwatch.StartNew();
+
+        n = 16;
+        calculate(n);
+        t = (float)watch.ElapsedMilliseconds/1000;
+        Console.WriteLine(t);
+        watch.Restart();
+        
+        n = 32;
+        calculate(n);
+        t = (float)watch.ElapsedMilliseconds/1000;
+        Console.WriteLine(t);
+        watch.Restart();
+
+        n = 64;
+        calculate(n);
+        t = (float)watch.ElapsedMilliseconds/1000;
+        Console.WriteLine(t);
+        watch.Restart();
+
+        n = 128;
+        calculate(n);
+        t = (float)watch.ElapsedMilliseconds/1000;
+        Console.WriteLine(t);
+        watch.Restart();
+
+        n = 256;
+        calculate(n);
+        t = (float)watch.ElapsedMilliseconds/1000;
+        Console.WriteLine(t);
+        watch.Restart();
+
+        n = 512;
+        calculate(n);
+        t = (float)watch.ElapsedMilliseconds/1000;
+        Console.WriteLine(t);
+        watch.Restart();
+
+        n = 1024;
+        calculate(n);
+        t = (float)watch.ElapsedMilliseconds/1000;
+        Console.WriteLine(t);
+        watch.Restart();
+
+        n = 2048;
+        calculate(n);
+        t = (float)watch.ElapsedMilliseconds/1000;
+        Console.WriteLine(t);
+        watch.Restart();
+
+        n = 4096;
+        calculate(n);
+        t = (float)watch.ElapsedMilliseconds/1000;
+        Console.WriteLine(t);
+        watch.Restart();
+    }
+
+    //calculate creates a random matrix and calls Strassen's on it
+    public static void calculate(int n)
+    {   
+        Random rng = new Random();
+        float[,] m1 = new float[n,n];
+        float[,] m2 = new float[n,n];
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < n; j++)
+            {
+                m1[i,j] = (float)rng.NextDouble();
+            }
+        }
+
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < n; j++)
+            {
+                m2[i,j] = (float)rng.NextDouble();
+            }
+        }
+        
+        float[,] m3 = strassenParallel(m1, m2, n).Result;
+    }
+    
+    //the recursive function that actually perfroms the calculation 
+    static float[,] strassen(float[,] a, float[,] b, int n)
+    {
+        //terrible, terrible code
+        //basically has a function call for every single element in the matrix
+        if (n == 1)
+        {
+            a[0,0] = a[0,0]*b[0,0];
+            return a;
+        }
+        else
+        {
+            //splits the matrix
+            float[,] a11 = matrixDivide(a, n, 11);
+            float[,] a12 = matrixDivide(a, n, 12);
+            float[,] a21 = matrixDivide(a, n, 21);
+            float[,] a22 = matrixDivide(a, n, 22);
+
+            float[,] b11 = matrixDivide(b, n, 11);
+            float[,] b12 = matrixDivide(b, n, 12);
+            float[,] b21 = matrixDivide(b, n, 21);
+            float[,] b22 = matrixDivide(b, n, 22);
+
+            //matrix operations corresponding to Strassen's operations
+            float[,] p1 = strassen(a11, matrixDiff(b12, b22, n/2), n/2);
+            float[,] p2 = strassen(matrixSum(a11, a12, n/2), b22, n/2);
+            float[,] p3 = strassen(matrixSum(a21, a22, n/2), b11, n/2);
+            float[,] p4 = strassen(a22, matrixDiff(b21, b11, n/2), n/2);
+            float[,] p5 = strassen(matrixSum(a11, a22, n/2), matrixSum(b11, b22, n/2), n/2);
+            float[,] p6 = strassen(matrixDiff(a12, a22, n/2), matrixSum(b21, b22, n/2), n/2);
+            float[,] p7 = strassen(matrixDiff(a11, a21, n/2), matrixSum(b11, b12, n/2), n/2);
+
+            float[,] c11 = matrixDiff(matrixSum(p5, p4, n/2),matrixDiff(p2, p6, n/2), n/2);
+            float[,] c12 = matrixSum(p1, p2, n/2);
+            float[,] c21 = matrixSum(p3, p4, n/2);
+            float[,] c22 = matrixDiff(matrixSum(p1, p5, n/2), matrixSum(p3, p7, n/2), n/2);
+
+            //loop to combine
+            for (int i = 0; i < n/2; i++)
+            {
+                for (int j = 0; j < n/2; j++)
+                {
+                    a[i,j] = c11[i,j];
+                    a[i,j+n/2] = c12[i,j];
+                    a[i+n/2,j] = c21[i,j];
+                    a[i+n/2,j+n/2] = c22[i,j];
+                }
+            }
+            return a;
+        }
+    }
+
+    //the recursive function that executes on each different task
+    static async Task<float[,]> strassenParallel(float[,] a, float[,] b, int n)
+    {
+        //below n = 16, new tasks are no longer created
+        if (n <= 16)
+        {
+            a = strassen(a, b, n);
+            return a; 
+        }
+        else
+        {
+            float[,] a11 = matrixDivide(a, n, 11);
+            float[,] a12 = matrixDivide(a, n, 12);
+            float[,] a21 = matrixDivide(a, n, 21);
+            float[,] a22 = matrixDivide(a, n, 22);
+
+            float[,] b11 = matrixDivide(b, n, 11);
+            float[,] b12 = matrixDivide(b, n, 12);
+            float[,] b21 = matrixDivide(b, n, 21);
+            float[,] b22 = matrixDivide(b, n, 22);
+
+            //executes each new recursive call using a different task
+            var tasks = new Task<float[,]>[7];
+            tasks[0] = Task.Run<float[,]>(() => strassenParallel(a11, matrixDiff(b12, b22, n/2), n/2));
+            tasks[1] = Task.Run<float[,]>(() => strassenParallel(matrixSum(a11, a12, n/2), b22, n/2));
+            tasks[2] = Task.Run<float[,]>(() => strassenParallel(matrixSum(a21, a22, n/2), b11, n/2));
+            tasks[3] = Task.Run<float[,]>(() => strassenParallel(a22, matrixDiff(b21, b11, n/2), n/2));
+            tasks[4] = Task.Run<float[,]>(() => strassenParallel(matrixSum(a11, a22, n/2), matrixSum(b11, b22, n/2), n/2));
+            tasks[5] = Task.Run<float[,]>(() => strassenParallel(matrixDiff(a12, a22, n/2), matrixSum(b21, b22, n/2), n/2));
+            tasks[6] = Task.Run<float[,]>(() => strassenParallel(matrixDiff(a11, a21, n/2), matrixSum(b11, b12, n/2), n/2));
+            await Task.WhenAll(tasks);
+
+            float[,] c11 = matrixDiff(matrixSum(tasks[4].Result, tasks[3].Result, n/2),matrixDiff(tasks[1].Result, tasks[5].Result, n/2), n/2);
+            float[,] c12 = matrixSum(tasks[0].Result, tasks[1].Result, n/2);
+            float[,] c21 = matrixSum(tasks[2].Result, tasks[3].Result, n/2);
+            float[,] c22 = matrixDiff(matrixSum(tasks[0].Result, tasks[4].Result, n/2), matrixSum(tasks[2].Result, tasks[6].Result, n/2), n/2);
+
+            for (int i = 0; i < n/2; i++)
+            {
+                for (int j = 0; j < n/2; j++)
+                {
+                    a[i,j] = c11[i,j];
+                    a[i,j+n/2] = c12[i,j];
+                    a[i+n/2,j] = c21[i,j];
+                    a[i+n/2,j+n/2] = c22[i,j];
+                }
+            }
+            return a;
+        }
+    }
+
+    //various matrix operations
+    static float[,] matrixSum(float[,] a, float[,] b, int n)
+    {
+        float[,] c = new float[n,n];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+                c[i,j] = a[i,j] + b[i,j];
+        return c;
+    }
+
+    static float[,] matrixDiff(float[,] a, float[,] b, int n)
+    {
+        float[,] c = new float[n,n];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++)
+                c[i,j] = a[i,j] - b[i,j];
+        return c;
+    }
+
+    static float[,] matrixCombine(float[,] a11, float[,] a12, float[,] a21, float[,] a22, int n)
+    {
+        float[,] a = new float[n,n];
+        for (int i = 0; i < n/2; i++)
+        {
+            for (int j = 0; j < n/2; j++)
+            {
+                a[i,j] = a11[i,j];
+                a[i,j+n/2] = a12[i,j];
+                a[i+n/2,j] = a21[i,j];
+                a[i+n/2,j+n/2] = a22[i,j];
+            }
+        }
+        return a;
+    }
+
+    static float[,] matrixDivide(float[,] a, int n, int region)
+    {
+        float[,] c = new float[n/2,n/2];
+        if (region == 11)
+        {
+            for (int i = 0, x = 0; x < n/2; i++, x++)
+            {
+                for (int j = 0, y = 0; y < n/2; j++, y++)
+                {
+                    c[i,j] = a[x,y];
+                }
+            }
+        }
+        else if (region == 12)
+        {
+            for (int i = 0, x = 0; x < n/2; i++, x++)
+            {
+                for (int j = 0, y = n/2; y < n; j++, y++)
+                {
+                    c[i,j] = a[x,y];
+                }
+            }
+        }
+        else if (region == 21)
+        {
+            for (int i = 0, x = n/2; x < n; i++, x++)
+            {
+                for (int j = 0, y = 0; y < n/2; j++, y++)
+                {
+                    c[i,j] = a[x,y];
+                }
+            }
+        }
+        else if (region == 22) 
+        {
+            for (int i = 0, x = n/2; x < n; i++, x++)
+            {
+                for (int j = 0, y = n/2; y < n; j++, y++)
+                {
+                    c[i,j] = a[x,y];
+                }
+            }
+        }
+        return c;
+    }
+}
